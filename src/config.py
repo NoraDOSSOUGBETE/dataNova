@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     logs_dir: Path = Field(default_factory=lambda: Path(__file__).parent.parent / "logs")
 
     # API Keys
-    anthropic_api_key: str = Field(..., description="Clé API Anthropic (Claude)")
+    anthropic_api_key: str = Field(default="", description="Clé API Anthropic (Claude)")
 
     # Database
     database_url: str = Field(
