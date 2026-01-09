@@ -49,6 +49,14 @@ class Document(Base):
     nc_codes = Column(JSON, nullable=True)
     document_metadata = Column(JSON, nullable=True)
     status = Column(String(20), nullable=False, default="new")
+    
+    # Workflow de validation (Agent 1A -> 1B -> UI -> Agent 2)
+    workflow_status = Column(String(20), nullable=False, default="raw")
+    # Valeurs: raw, analyzed, rejected_analysis, validated, rejected_validation
+    analyzed_at = Column(DateTime, nullable=True)
+    validated_at = Column(DateTime, nullable=True)
+    validated_by = Column(String(200), nullable=True)
+    
     first_seen = Column(DateTime, nullable=False, default=datetime.utcnow)
     last_checked = Column(DateTime, nullable=False, default=datetime.utcnow)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
@@ -62,64 +70,108 @@ class Document(Base):
 
 class Analysis(Base):
     """
-    Résultats d'analyse de pertinence par Agent 1B
+    Résultats d'analyse de pertinence par Agent 1B (LLM unique)
     
     Attributes:
         id: Identifiant unique
         document_id: Référence au document analysé
-        keyword_match: Niveau 1 passé (mots-clés)
-        keyword_score: Score mots-clés (0-1)
+        is_relevant: Document pertinent (True/False)
+        confidence: Niveau de confiance LLM (0-1)
         matched_keywords: Liste des mots-clés trouvés (JSON)
-        nc_code_match: Niveau 2 passé (codes NC)
-        nc_code_score: Score codes NC (0-1)
         matched_nc_codes: Codes NC correspondants (JSON)
-        llm_score: Score sémantique LLM (0-1)
-        llm_reasoning: Explication du LLM
-        total_score: Score final pondéré (0-1)
-        criticality: CRITICAL, HIGH, MEDIUM, LOW
-        relevant: Document pertinent ou non
+        llm_reasoning: Explication complète du LLM
+        validation_status: pending, approved, rejected (validation UI)
+        validation_comment: Commentaire du juriste
+        validated_by: Email du validateur
+        validated_at: Date de validation
     """
     __tablename__ = "analyses"
     
     id = Column(String, primary_key=True, default=generate_uuid)
     document_id = Column(String, ForeignKey("documents.id"), nullable=False)
     
-    # Niveau 1: Filtrage par mots-clés
-    keyword_match = Column(Boolean, nullable=False, default=False)
-    keyword_score = Column(Float, nullable=False, default=0.0)
+    # Analyse LLM unique (remplace triple filtrage)
+    is_relevant = Column(Boolean, nullable=False, default=False)
+    confidence = Column(Float, nullable=False, default=0.0)  # 0-1
     matched_keywords = Column(JSON, nullable=True)
-    
-    # Niveau 2: Filtrage par codes NC
-    nc_code_match = Column(Boolean, nullable=False, default=False)
-    nc_code_score = Column(Float, nullable=False, default=0.0)
     matched_nc_codes = Column(JSON, nullable=True)
-    
-    # Niveau 3: Analyse sémantique LLM
-    llm_score = Column(Float, nullable=False, default=0.0)
     llm_reasoning = Column(Text, nullable=True)
     
-    # Score final
-    total_score = Column(Float, nullable=False, default=0.0)
-    criticality = Column(String(20), nullable=False)
-    relevant = Column(Boolean, nullable=False, default=False)
+    # Validation humaine (UI)
+    validation_status = Column(String(20), nullable=False, default="pending")
+    # Valeurs: pending, approved, rejected
+    validation_comment = Column(Text, nullable=True)
+    validated_by = Column(String(200), nullable=True)
+    validated_at = Column(DateTime, nullable=True)
     
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     
     # Relations
     document = relationship("Document", back_populates="analyses")
-    alerts = relationship("Alert", back_populates="analysis", cascade="all, delete-orphan")
+    impact_assessments = relationship("ImpactAssessment", back_populates="analysis", cascade="all, delete-orphan")
     
     def __repr__(self):
-        return f"<Analysis(id={self.id}, score={self.total_score:.2f}, criticality={self.criticality})>"
+        return f"<Analysis(id={self.id}, relevant={self.is_relevant}, confidence={self.confidence:.2f})>"
+
+
+class ImpactAssessment(Base):
+    """
+    Analyses d'impact détaillées par Agent 2
+    
+    Attributes:
+        id: Identifiant unique
+        analysis_id: Référence à l'analyse validée
+        total_score: Score d'impact final (0-1)
+        criticality: CRITICAL, HIGH, MEDIUM, LOW
+        affected_suppliers: Liste des fournisseurs impactés (JSON)
+        affected_products: Liste des produits impactés (JSON)
+        affected_customs_flows: Flux douaniers impactés (JSON)
+        financial_impact: Estimation financière (JSON)
+        recommended_actions: Plan d'action recommandé (JSON)
+        risk_mitigation: Stratégies d'atténuation (JSON)
+        llm_reasoning: Explication détaillée LLM
+        confidence_level: HIGH, MEDIUM, LOW
+    """
+    __tablename__ = "impact_assessments"
+    
+    id = Column(String, primary_key=True, default=generate_uuid)
+    analysis_id = Column(String, ForeignKey("analyses.id"), nullable=False)
+    
+    # Scoring et criticité (déplacé depuis Analysis)
+    total_score = Column(Float, nullable=False, default=0.0)  # 0-1
+    criticality = Column(String(20), nullable=False)  # CRITICAL, HIGH, MEDIUM, LOW
+    
+    # Impacts détaillés
+    affected_suppliers = Column(JSON, nullable=True)  # [{id, name, impact_level}]
+    affected_products = Column(JSON, nullable=True)   # [{id, name, nc_code, impact}]
+    affected_customs_flows = Column(JSON, nullable=True)  # [{origin, destination, volume}]
+    financial_impact = Column(JSON, nullable=True)  # {estimated_cost, currency, timeframe}
+    
+    # Recommandations
+    recommended_actions = Column(JSON, nullable=False)  # [{priority, action, deadline}]
+    risk_mitigation = Column(JSON, nullable=True)  # [{risk, strategy, resources}]
+    
+    # Métadonnées LLM
+    llm_reasoning = Column(Text, nullable=True)
+    confidence_level = Column(String(20), nullable=True)  # HIGH, MEDIUM, LOW
+    
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    
+    # Relations
+    analysis = relationship("Analysis", back_populates="impact_assessments")
+    alerts = relationship("Alert", back_populates="impact_assessment", cascade="all, delete-orphan")
+    
+    def __repr__(self):
+        return f"<ImpactAssessment(id={self.id}, score={self.total_score:.2f}, criticality={self.criticality})>"
 
 
 class Alert(Base):
     """
-    Alertes générées et statut d'envoi
+    Alertes générées par Agent 2 et statut d'envoi
     
     Attributes:
         id: Identifiant unique
-        analysis_id: Référence à l'analyse
+        impact_assessment_id: Référence à l'impact assessment
         alert_type: Type (email, webhook, slack)
         alert_data: Contenu structuré de l'alerte (JSON)
         recipients: Liste des destinataires (JSON)
@@ -130,7 +182,7 @@ class Alert(Base):
     __tablename__ = "alerts"
     
     id = Column(String, primary_key=True, default=generate_uuid)
-    analysis_id = Column(String, ForeignKey("analyses.id"), nullable=False)
+    impact_assessment_id = Column(String, ForeignKey("impact_assessments.id"), nullable=False)
     alert_type = Column(String(50), nullable=False, default="email")
     alert_data = Column(JSON, nullable=False)
     recipients = Column(JSON, nullable=False)
@@ -140,7 +192,7 @@ class Alert(Base):
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     
     # Relations
-    analysis = relationship("Analysis", back_populates="alerts")
+    impact_assessment = relationship("ImpactAssessment", back_populates="alerts")
     
     def __repr__(self):
         return f"<Alert(id={self.id}, type={self.alert_type}, status={self.status})>"

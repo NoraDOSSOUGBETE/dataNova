@@ -8,7 +8,7 @@ Documentation: docs/DATABASE_SCHEMA.md
 from typing import List, Optional
 from datetime import datetime
 from sqlalchemy.orm import Session
-from src.storage.models import Document, Analysis, Alert, ExecutionLog, CompanyProfile
+from src.storage.models import Document, Analysis, Alert, ExecutionLog, CompanyProfile, ImpactAssessment
 
 
 class DocumentRepository:
@@ -111,6 +111,50 @@ class DocumentRepository:
         ).group_by(Document.status).all()
         
         return {status: count for status, count in results}
+    
+    def find_by_workflow_status(self, workflow_status: str) -> List[Document]:
+        """
+        Trouver les documents par workflow_status
+        
+        Args:
+            workflow_status: raw, analyzed, rejected_analysis, validated, rejected_validation
+        
+        Returns:
+            Liste de documents
+        """
+        return self.session.query(Document)\
+            .filter(Document.workflow_status == workflow_status)\
+            .order_by(Document.created_at.desc())\
+            .all()
+    
+    def update_workflow_status(
+        self,
+        document_id: str,
+        workflow_status: str,
+        analyzed_at: Optional[datetime] = None,
+        validated_at: Optional[datetime] = None,
+        validated_by: Optional[str] = None
+    ) -> None:
+        """
+        Mettre à jour le workflow_status d'un document
+        
+        Args:
+            document_id: ID du document
+            workflow_status: Nouveau statut workflow
+            analyzed_at: Date d'analyse (optionnel)
+            validated_at: Date de validation (optionnel)
+            validated_by: Email du validateur (optionnel)
+        """
+        document = self.find_by_id(document_id)
+        if document:
+            document.workflow_status = workflow_status
+            if analyzed_at:
+                document.analyzed_at = analyzed_at
+            if validated_at:
+                document.validated_at = validated_at
+            if validated_by:
+                document.validated_by = validated_by
+            self.session.flush()
 
 
 class AnalysisRepository:
@@ -144,35 +188,128 @@ class AnalysisRepository:
             .order_by(Analysis.created_at.desc())\
             .first()
     
-    def list_relevant_analyses(self, min_score: float = 0.6) -> List[Analysis]:
+    def list_relevant_analyses(self, validation_status: str = "approved") -> List[Analysis]:
         """
-        Lister les analyses pertinentes (relevant=True)
+        Lister les analyses par validation_status
         
         Args:
-            min_score: Score minimum (0-1)
-        
-        Returns:
-            Liste d'analyses pertinentes
-        """
-        return self.session.query(Analysis)\
-            .filter(Analysis.relevant == True)\
-            .filter(Analysis.total_score >= min_score)\
-            .order_by(Analysis.total_score.desc())\
-            .all()
-    
-    def list_by_criticality(self, criticality: str) -> List[Analysis]:
-        """
-        Lister les analyses par criticité
-        
-        Args:
-            criticality: CRITICAL, HIGH, MEDIUM, LOW
+            validation_status: pending, approved, rejected (défaut: approved)
         
         Returns:
             Liste d'analyses
         """
         return self.session.query(Analysis)\
-            .filter(Analysis.criticality == criticality)\
+            .filter(Analysis.validation_status == validation_status)\
             .order_by(Analysis.created_at.desc())\
+            .all()
+    
+    def find_by_validation_status(self, validation_status: str) -> List[Analysis]:
+        """
+        Trouver les analyses par validation_status
+        
+        Args:
+            validation_status: pending, approved, rejected
+        
+        Returns:
+            Liste d'analyses
+        """
+        return self.session.query(Analysis)\
+            .filter(Analysis.validation_status == validation_status)\
+            .order_by(Analysis.created_at.desc())\
+            .all()
+    
+    def update_validation(
+        self,
+        analysis_id: str,
+        approved: bool,
+        comment: str,
+        validated_by: str
+    ) -> None:
+        """
+        Mettre à jour la validation d'une analyse
+        
+        Args:
+            analysis_id: ID de l'analyse
+            approved: True si approuvé, False si rejeté
+            comment: Commentaire du juriste
+            validated_by: Email du validateur
+        """
+        analysis = self.find_by_id(analysis_id)
+        if analysis:
+            analysis.validation_status = "approved" if approved else "rejected"
+            analysis.validation_comment = comment
+            analysis.validated_by = validated_by
+            analysis.validated_at = datetime.utcnow()
+            
+            # Mettre à jour le document aussi
+            if analysis.document:
+                analysis.document.workflow_status = "validated" if approved else "rejected_validation"
+                analysis.document.validated_at = datetime.utcnow()
+                analysis.document.validated_by = validated_by
+            
+            self.session.flush()
+
+
+class ImpactAssessmentRepository:
+    """Repository pour gérer les analyses d'impact (Agent 2)"""
+    
+    def __init__(self, session: Session):
+        self.session = session
+    
+    def save(self, impact: ImpactAssessment) -> ImpactAssessment:
+        """Sauvegarder une analyse d'impact"""
+        self.session.add(impact)
+        self.session.flush()
+        return impact
+    
+    def find_by_id(self, impact_id: str) -> Optional[ImpactAssessment]:
+        """Trouver une analyse d'impact par ID"""
+        return self.session.query(ImpactAssessment)\
+            .filter(ImpactAssessment.id == impact_id)\
+            .first()
+    
+    def find_by_analysis_id(self, analysis_id: str) -> Optional[ImpactAssessment]:
+        """
+        Trouver l'analyse d'impact pour une analyse donnée
+        
+        Args:
+            analysis_id: ID de l'analyse
+        
+        Returns:
+            ImpactAssessment ou None
+        """
+        return self.session.query(ImpactAssessment)\
+            .filter(ImpactAssessment.analysis_id == analysis_id)\
+            .first()
+    
+    def list_by_criticality(self, criticality: str) -> List[ImpactAssessment]:
+        """
+        Lister les analyses d'impact par criticité
+        
+        Args:
+            criticality: CRITICAL, HIGH, MEDIUM, LOW
+        
+        Returns:
+            Liste d'analyses d'impact
+        """
+        return self.session.query(ImpactAssessment)\
+            .filter(ImpactAssessment.criticality == criticality)\
+            .order_by(ImpactAssessment.created_at.desc())\
+            .all()
+    
+    def list_high_priority(self, min_score: float = 0.7) -> List[ImpactAssessment]:
+        """
+        Lister les analyses d'impact haute priorité
+        
+        Args:
+            min_score: Score minimum (0-1)
+        
+        Returns:
+            Liste d'analyses d'impact
+        """
+        return self.session.query(ImpactAssessment)\
+            .filter(ImpactAssessment.total_score >= min_score)\
+            .order_by(ImpactAssessment.total_score.desc())\
             .all()
 
 
@@ -191,6 +328,21 @@ class AlertRepository:
     def find_by_id(self, alert_id: str) -> Optional[Alert]:
         """Trouver une alerte par ID"""
         return self.session.query(Alert).filter(Alert.id == alert_id).first()
+    
+    def find_by_impact_assessment_id(self, impact_assessment_id: str) -> List[Alert]:
+        """
+        Trouver les alertes pour un impact assessment donné
+        
+        Args:
+            impact_assessment_id: ID de l'impact assessment
+        
+        Returns:
+            Liste d'alertes
+        """
+        return self.session.query(Alert)\
+            .filter(Alert.impact_assessment_id == impact_assessment_id)\
+            .order_by(Alert.created_at.desc())\
+            .all()
     
     def list_unsent_alerts(self) -> List[Alert]:
         """
