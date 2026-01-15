@@ -1,15 +1,27 @@
 
 import React, { useState } from 'react';
-import { Search, Bell, AlertCircle, Loader2 } from 'lucide-react';
+import { Search, Bell, AlertCircle, Loader2, Download, Copy, SlidersHorizontal } from 'lucide-react';
 import { Regulation } from '../types';
 import { RegulationCard } from '../components/RegulationCard/RegulationCard';
 import { Sidebar } from '../components/Sidebar/Sidebar';
+import { AdvancedFilters, FilterOptions } from '../components/AdvancedFilters/AdvancedFilters';
 import { useRegulations, useRegulationActions } from '../hooks/useRegulations';
+import { downloadValidatedRegulationsJSON, copyValidatedRegulationsJSON, logValidatedRegulationsJSON } from '../utils/exportData';
 import './LegalTeamPage.css';
 
 export const LegalTeamPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeFilter, setActiveFilter] = useState('all');
+  const [copySuccess, setCopySuccess] = useState(false);
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  
+  const [advancedFilters, setAdvancedFilters] = useState<FilterOptions>({
+    dateRange: 'all',
+    regulationType: [],
+    ncCodes: [],
+    confidenceMin: 0,
+    confidenceMax: 1,
+  });
   
   // Utilisation du hook pour récupérer les données du backend
   const { regulations, loading, error, total, refetch } = useRegulations({
@@ -46,9 +58,79 @@ export const LegalTeamPage: React.FC = () => {
     }
   };
 
+  const handleExportJSON = () => {
+    downloadValidatedRegulationsJSON();
+  };
+
+  const handleCopyJSON = async () => {
+    const success = await copyValidatedRegulationsJSON();
+    if (success) {
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
+    }
+  };
+
+  const handleLogJSON = () => {
+    logValidatedRegulationsJSON();
+  };
+
+  const handleResetFilters = () => {
+    setAdvancedFilters({
+      dateRange: 'all',
+      regulationType: [],
+      ncCodes: [],
+      confidenceMin: 0,
+      confidenceMax: 1,
+    });
+  };
+
+  const applyAdvancedFilters = (regs: Regulation[]) => {
+    let filtered = [...regs];
+
+    // Filtre par date
+    if (advancedFilters.dateRange !== 'all') {
+      const now = new Date();
+      filtered = filtered.filter((reg) => {
+        const regDate = new Date(reg.dateCreated);
+        if (advancedFilters.dateRange === 'week') {
+          const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          return regDate >= weekAgo;
+        }
+        if (advancedFilters.dateRange === 'month') {
+          const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+          return regDate >= monthAgo;
+        }
+        if (advancedFilters.dateRange === 'custom' && advancedFilters.customStartDate && advancedFilters.customEndDate) {
+          const start = new Date(advancedFilters.customStartDate);
+          const end = new Date(advancedFilters.customEndDate);
+          return regDate >= start && regDate <= end;
+        }
+        return true;
+      });
+    }
+
+    // Filtre par type
+    if (advancedFilters.regulationType.length > 0) {
+      filtered = filtered.filter((reg) =>
+        advancedFilters.regulationType.includes(reg.type)
+      );
+    }
+
+    // Filtre par codes NC (simulé avec mock data)
+    // Dans la vraie API, les réglementations auront un champ ncCodes
+    if (advancedFilters.ncCodes.length > 0) {
+      // Pour l'instant, on garde toutes les réglementations
+      // Car les données mockées n'ont pas de codes NC
+    }
+
+    // Filtre par confiance IA (simulé - mock data n'a pas ce champ)
+    // Dans la vraie API, filtrer par confidence between min and max
+
+    return filtered;
+  };
+
   const getFilteredRegulations = () => {
-    // Plus besoin de filtrage côté frontend car c'est fait par l'API
-    return regulations;
+    return applyAdvancedFilters(regulations);
   };
 
   const filteredRegulations = getFilteredRegulations();
@@ -117,10 +199,40 @@ export const LegalTeamPage: React.FC = () => {
                 className="search-input"
               />
             </div>
+
+            <button 
+              className={`filters-toggle-btn ${showAdvancedFilters ? 'active' : ''}`}
+              onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+              title="Filtres avancés"
+            >
+              <SlidersHorizontal size={20} />
+              Filtres
+            </button>
             
             <button className="notification-btn">
               <Bell className="bell-icon" />
             </button>
+
+            {activeFilter === 'validated' && (
+              <>
+                <button 
+                  className="export-btn"
+                  onClick={handleExportJSON}
+                  title="Télécharger en JSON"
+                >
+                  <Download size={20} />
+                  Export JSON
+                </button>
+                <button 
+                  className="copy-btn"
+                  onClick={handleCopyJSON}
+                  title="Copier le JSON"
+                >
+                  <Copy size={20} />
+                  {copySuccess ? '✓ Copié!' : 'Copier JSON'}
+                </button>
+              </>
+            )}
             
             <button 
               className="disconnect-btn"
@@ -134,6 +246,16 @@ export const LegalTeamPage: React.FC = () => {
             </button>
           </div>
         </header>
+
+        {showAdvancedFilters && (
+          <div className="filters-container">
+            <AdvancedFilters
+              filters={advancedFilters}
+              onFiltersChange={setAdvancedFilters}
+              onReset={handleResetFilters}
+            />
+          </div>
+        )}
 
         <div className="content-stats">
           <p className="regulations-count">

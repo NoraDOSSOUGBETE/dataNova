@@ -1,5 +1,5 @@
-import React from 'react';
-import { BarChart, FileText, TrendingUp, AlertTriangle, Calendar, Download, Bell, CheckCircle } from 'lucide-react';
+import React, { useState } from 'react';
+import { BarChart, FileText, TrendingUp, AlertTriangle, Calendar, Download, Bell, CheckCircle, User, Mail, Building, Shield } from 'lucide-react';
 import './DecisionDashboard.css';
 
 interface DashboardStats {
@@ -11,6 +11,8 @@ interface DashboardStats {
 }
 
 export const DecisionDashboard: React.FC = () => {
+  const [activeView, setActiveView] = useState<'dashboard' | 'profile'>('dashboard');
+  
   const stats: DashboardStats = {
     totalRegulations: 123,
     progressPercentage: 78,
@@ -42,12 +44,18 @@ export const DecisionDashboard: React.FC = () => {
         </div>
 
         <nav className="decision-sidebar-nav">
-          <div className="decision-nav-item active">
+          <div 
+            className={`decision-nav-item ${activeView === 'dashboard' ? 'active' : ''}`}
+            onClick={() => setActiveView('dashboard')}
+          >
             <BarChart className="decision-nav-icon" />
             <span>Dashboard</span>
           </div>
           
-          <div className="decision-nav-item">
+          <div 
+            className={`decision-nav-item ${activeView === 'profile' ? 'active' : ''}`}
+            onClick={() => setActiveView('profile')}
+          >
             <FileText className="decision-nav-icon" />
             <span>Profil</span>
           </div>
@@ -65,22 +73,26 @@ export const DecisionDashboard: React.FC = () => {
             <div className="decision-notification-icon">
               <Bell size={24} color="#f59e0b" />
             </div>
-            <h1>Dashboard Décideurs</h1>
+            <h1>{activeView === 'dashboard' ? 'Dashboard Décideurs' : 'Profil Utilisateur'}</h1>
           </div>
           
-          <div className="decision-header-right">
-            <button 
-              className="decision-export-btn"
-              onClick={handleExportPDF}
-            >
-              <Download className="btn-icon" />
-              Exporter Dashboard PDF
-            </button>
-          </div>
+          {activeView === 'dashboard' && (
+            <div className="decision-header-right">
+              <button 
+                className="decision-export-btn"
+                onClick={handleExportPDF}
+              >
+                <Download className="btn-icon" />
+                Exporter Dashboard PDF
+              </button>
+            </div>
+          )}
         </header>
 
-        {/* Key Indicators */}
-        <div className="decision-content">
+        {/* Conditional Content */}
+        {activeView === 'dashboard' ? (
+          // Dashboard Content
+          <div className="decision-content">
           <section className="decision-indicators-section">
             <h2>Indicateurs clés</h2>
             
@@ -107,7 +119,7 @@ export const DecisionDashboard: React.FC = () => {
 
               <div className="decision-indicator-card warning">
                 <div className="decision-indicator-icon">
-                  <AlertTriangle size={32} color="#f59e0b" />
+                  <AlertTriangle size={32} color="#f59f0bfb" />
                 </div>
                 <div className="decision-indicator-value">{stats.highRisks}</div>
                 <div className="decision-indicator-label">Risques élevés détectés</div>
@@ -131,7 +143,7 @@ export const DecisionDashboard: React.FC = () => {
               <div className="decision-chart-card">
                 <h3>Répartition par date d'application</h3>
                 <div className="decision-chart-placeholder">
-                  <BarChart size={48} color="#9ca3af" />
+                  <BarChart size={48} color="#9caeafff" />
                   <p>Graphique de répartition temporelle</p>
                 </div>
               </div>
@@ -146,6 +158,82 @@ export const DecisionDashboard: React.FC = () => {
             </div>
           </section>
         </div>
+        ) : (
+          // Profile Content
+          <div className="decision-content">
+            <section className="profile-section">
+              <div className="profile-card">
+                <div className="profile-header">
+                  <div className="profile-avatar-large">
+                    <User size={48} color="#fff" />
+                  </div>
+                  <h2>Décideur Hutchinson</h2>
+                  <p className="profile-role">Profil Décisionnel</p>
+                </div>
+
+                <div className="profile-info-grid">
+                  <div className="profile-info-item">
+                    <div className="profile-info-icon">
+                      <Mail size={20} color="#dc2626" />
+                    </div>
+                    <div className="profile-info-content">
+                      <div className="profile-info-label">Email</div>
+                      <div className="profile-info-value">decideur@hutchinson.com</div>
+                    </div>
+                  </div>
+
+                  <div className="profile-info-item">
+                    <div className="profile-info-icon">
+                      <Building size={20} color="#dc2626" />
+                    </div>
+                    <div className="profile-info-content">
+                      <div className="profile-info-label">Département</div>
+                      <div className="profile-info-value">Direction Générale</div>
+                    </div>
+                  </div>
+
+                  <div className="profile-info-item">
+                    <div className="profile-info-icon">
+                      <Shield size={20} color="#dc2626" />
+                    </div>
+                    <div className="profile-info-content">
+                      <div className="profile-info-label">Permissions</div>
+                      <div className="profile-info-value">Lecture Dashboard, Export PDF</div>
+                    </div>
+                  </div>
+
+                  <div className="profile-info-item">
+                    <div className="profile-info-icon">
+                      <Calendar size={20} color="#dc2626" />
+                    </div>
+                    <div className="profile-info-content">
+                      <div className="profile-info-label">Dernière connexion</div>
+                      <div className="profile-info-value">15/01/2026 - 14:30</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="profile-stats">
+                  <h3>Statistiques d'utilisation</h3>
+                  <div className="profile-stats-grid">
+                    <div className="profile-stat-item">
+                      <div className="profile-stat-value">47</div>
+                      <div className="profile-stat-label">Connexions ce mois</div>
+                    </div>
+                    <div className="profile-stat-item">
+                      <div className="profile-stat-value">23</div>
+                      <div className="profile-stat-label">Exports PDF</div>
+                    </div>
+                    <div className="profile-stat-item">
+                      <div className="profile-stat-value">156</div>
+                      <div className="profile-stat-label">Réglementations consultées</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+        )}
       </div>
     </div>
   );

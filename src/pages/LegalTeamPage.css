@@ -109,6 +109,44 @@
   background: #d11d69;
 }
 
+.export-btn,
+.copy-btn,
+.filters-toggle-btn {
+  padding: 10px 20px;
+  background: #10b981;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 14px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+}
+
+.export-btn:hover,
+.copy-btn:hover,
+.filters-toggle-btn:hover {
+  background: #059669;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.filters-toggle-btn.active {
+  background: #059669;
+}
+
+.copy-btn:active {
+  transform: scale(0.98);
+}
+
+.filters-container {
+  padding: 0 32px 16px;
+}
+
 .content-stats {
   padding: 20px 32px 16px;
 }
