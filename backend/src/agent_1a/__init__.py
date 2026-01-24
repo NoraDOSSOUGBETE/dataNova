@@ -11,3 +11,8 @@ Modules:
 """
 
 __version__ = "0.1.0"
+
+# Importer la fonction principale
+from .agent import run_agent_1a_combined
+
+__all__ = ["run_agent_1a_combined"]
