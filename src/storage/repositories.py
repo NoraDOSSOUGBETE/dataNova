@@ -52,12 +52,12 @@ class DocumentRepository:
             .first()
 
     def find_by_url(self, source_url: str) -> Optional[Document]:
-    """
-    Trouver un document par son URL source
-    
-    Usage: Vérifier si un document existe déjà (utilisé par change_detector)
-    
-    Args:
+        """
+        Trouver un document par son URL source
+        
+        Usage: Vérifier si un document existe déjà (utilisé par change_detector)
+        
+        Args:
         source_url: URL source du document (EUR-Lex)
     
     Returns:
