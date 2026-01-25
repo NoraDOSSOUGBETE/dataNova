@@ -29,12 +29,15 @@ dependencies = [
     "apscheduler>=3.10.0",
     # Logging
     "structlog>=24.4.0",
+    # Terminal UI
+    "rich>=13.7.0",
     # Email
     "aiosmtplib>=3.0.0",
     # Utilities
     "python-dateutil>=2.9.0",
     "pytz>=2024.1",
     "langgraph>=1.0.5",
+    "scrapy>=2.14.1",
 ]
 
 [project.optional-dependencies]
