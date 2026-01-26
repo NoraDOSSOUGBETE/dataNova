@@ -8,7 +8,15 @@ Documentation: docs/DATABASE_SCHEMA.md
 from typing import List, Optional
 from datetime import datetime
 from sqlalchemy.orm import Session
-from src.storage.models import Document, Analysis, Alert, ExecutionLog, CompanyProfile, ImpactAssessment
+from src.storage.models import (
+    Document,
+    Analysis,
+    Alert,
+    ExecutionLog,
+    CompanyProfile,
+    CompanyProcess,
+    ImpactAssessment,
+)
 
 
 class DocumentRepository:
@@ -49,22 +57,6 @@ class DocumentRepository:
         """
         return self.session.query(Document)\
             .filter(Document.hash_sha256 == hash_sha256)\
-            .first()
-
-    def find_by_url(self, source_url: str) -> Optional[Document]:
-        """
-        Trouver un document par son URL source
-        
-        Usage: Vérifier si un document existe déjà (utilisé par change_detector)
-        
-        Args:
-            source_url: URL source du document (EUR-Lex)
-        
-        Returns:
-            Document ou None
-        """
-        return self.session.query(Document)\
-            .filter(Document.source_url == source_url)\
             .first()
     
     def list_new_documents(self, limit: int = 50) -> List[Document]:
@@ -171,119 +163,6 @@ class DocumentRepository:
             if validated_by:
                 document.validated_by = validated_by
             self.session.flush()
-    
-    def upsert_document(
-        self,
-        source_url: str,
-        hash_sha256: str,
-        title: str,
-        content: str,
-        nc_codes: List[str],
-        regulation_type: str,
-        publication_date: Optional[datetime] = None,
-        document_metadata: Optional[dict] = None
-    ) -> tuple[Document, str]:
-        """
-        Insert ou Update un document (détection automatique nouveau/modifié/inchangé)
-        
-        Logique:
-        1. Chercher par hash → Si trouvé = contenu inchangé
-        2. Chercher par URL → Si trouvé = contenu modifié
-        3. Sinon → Nouveau document
-        
-        Args:
-            source_url: URL source du document
-            hash_sha256: Hash SHA-256 du contenu
-            title: Titre du document
-            content: Contenu extrait
-            nc_codes: Liste des codes NC trouvés
-            regulation_type: Type de réglementation (CBAM, EUDR, etc.)
-            publication_date: Date de publication (optionnel)
-            document_metadata: Métadonnées diverses (optionnel)
-        
-        Returns:
-            Tuple (Document, status) où status = "new" | "modified" | "unchanged"
-        
-        Usage Agent 1A:
-            doc, status = repo.upsert_document(
-                source_url=url,
-                hash_sha256=hash,
-                title=title,
-                content=text,
-                nc_codes=codes,
-                regulation_type="CBAM"
-            )
-            print(f"Document {status}: {doc.title}")
-        """
-        # Étape 1: Chercher par hash (contenu identique ?)
-        existing = self.find_by_hash(hash_sha256)
-        
-        if existing:
-            # Document existe avec même contenu = inchangé
-            existing.last_checked = datetime.utcnow()
-            existing.status = "unchanged"
-            self.session.flush()
-            return (existing, "unchanged")
-        
-        # Étape 2: Chercher par URL (même document, contenu différent ?)
-        existing_url = self.find_by_url(source_url)
-        
-        if existing_url:
-            # Document modifié (nouveau contenu)
-            existing_url.hash_sha256 = hash_sha256
-            existing_url.content = content
-            existing_url.nc_codes = nc_codes
-            existing_url.title = title
-            existing_url.publication_date = publication_date
-            existing_url.document_metadata = document_metadata or {}
-            existing_url.status = "modified"
-            existing_url.workflow_status = "raw"  # À réanalyser
-            existing_url.last_checked = datetime.utcnow()
-            self.session.flush()
-            return (existing_url, "modified")
-        
-        # Étape 3: Nouveau document
-        from src.storage.models import Document as DocumentModel
-        
-        doc = DocumentModel(
-            title=title,
-            source_url=source_url,
-            hash_sha256=hash_sha256,
-            content=content,
-            nc_codes=nc_codes,
-            regulation_type=regulation_type,
-            publication_date=publication_date,
-            document_metadata=document_metadata or {},
-            status="new",
-            workflow_status="raw"
-        )
-        self.session.add(doc)
-        self.session.flush()
-        return (doc, "new")
-    
-    def commit(self) -> None:
-        """
-        Helper pour commit la transaction
-        
-        Usage:
-            doc, status = repo.upsert_document(...)
-            repo.commit()
-        """
-        self.session.commit()
-    
-    def rollback(self) -> None:
-        """
-        Helper pour rollback la transaction en cas d'erreur
-        
-        Usage:
-            try:
-                doc = repo.upsert_document(...)
-                repo.commit()
-            except Exception:
-                repo.rollback()
-                raise
-        """
-        self.session.rollback()
 
 
 class AnalysisRepository:
@@ -302,16 +181,39 @@ class AnalysisRepository:
         """Trouver une analyse par ID"""
         return self.session.query(Analysis).filter(Analysis.id == analysis_id).first()
     
-    def find_by_document_id(self, document_id: str) -> List[Analysis]:
-        """Trouver les analyses pour un document"""
+    def find_by_document_id(self, document_id: str) -> Optional[Analysis]:
+        """
+        Trouver l'analyse d'un document spécifique
+        
+        Args:
+            document_id: ID du document
+        
+        Returns:
+            Analyse ou None
+        """
         return self.session.query(Analysis)\
             .filter(Analysis.document_id == document_id)\
+            .order_by(Analysis.created_at.desc())\
+            .first()
+    
+    def list_relevant_analyses(self, validation_status: str = "approved") -> List[Analysis]:
+        """
+        Lister les analyses par validation_status
+        
+        Args:
+            validation_status: pending, approved, rejected (défaut: approved)
+        
+        Returns:
+            Liste d'analyses
+        """
+        return self.session.query(Analysis)\
+            .filter(Analysis.validation_status == validation_status)\
             .order_by(Analysis.created_at.desc())\
             .all()
     
     def find_by_validation_status(self, validation_status: str) -> List[Analysis]:
         """
-        Trouver les analyses par statut de validation
+        Trouver les analyses par validation_status
         
         Args:
             validation_status: pending, approved, rejected
@@ -324,87 +226,99 @@ class AnalysisRepository:
             .order_by(Analysis.created_at.desc())\
             .all()
     
-    def update_validation_status(
+    def update_validation(
         self,
         analysis_id: str,
-        validation_status: str,
-        validation_comment: Optional[str] = None,
-        validated_by: Optional[str] = None
+        approved: bool,
+        comment: str,
+        validated_by: str
     ) -> None:
         """
-        Mettre à jour le statut de validation
+        Mettre à jour la validation d'une analyse
         
         Args:
             analysis_id: ID de l'analyse
-            validation_status: pending, approved, rejected
-            validation_comment: Commentaire du validateur
+            approved: True si approuvé, False si rejeté
+            comment: Commentaire du juriste
             validated_by: Email du validateur
         """
         analysis = self.find_by_id(analysis_id)
         if analysis:
-            analysis.validation_status = validation_status
-            if validation_comment:
-                analysis.validation_comment = validation_comment
-            if validated_by:
-                analysis.validated_by = validated_by
+            analysis.validation_status = "approved" if approved else "rejected"
+            analysis.validation_comment = comment
+            analysis.validated_by = validated_by
             analysis.validated_at = datetime.utcnow()
+            
+            # Mettre à jour le document aussi
+            if analysis.document:
+                analysis.document.workflow_status = "validated" if approved else "rejected_validation"
+                analysis.document.validated_at = datetime.utcnow()
+                analysis.document.validated_by = validated_by
+            
             self.session.flush()
-    
-    def commit(self) -> None:
-        """Commit la transaction"""
-        self.session.commit()
-    
-    def rollback(self) -> None:
-        """Rollback la transaction"""
-        self.session.rollback()
 
 
 class ImpactAssessmentRepository:
-    """Repository pour gérer les analyses d'impact"""
+    """Repository pour gérer les analyses d'impact (Agent 2)"""
     
     def __init__(self, session: Session):
         self.session = session
     
-    def save(self, impact_assessment: ImpactAssessment) -> ImpactAssessment:
+    def save(self, impact: ImpactAssessment) -> ImpactAssessment:
         """Sauvegarder une analyse d'impact"""
-        self.session.add(impact_assessment)
+        self.session.add(impact)
         self.session.flush()
-        return impact_assessment
+        return impact
     
-    def find_by_id(self, impact_assessment_id: str) -> Optional[ImpactAssessment]:
+    def find_by_id(self, impact_id: str) -> Optional[ImpactAssessment]:
         """Trouver une analyse d'impact par ID"""
         return self.session.query(ImpactAssessment)\
-            .filter(ImpactAssessment.id == impact_assessment_id)\
+            .filter(ImpactAssessment.id == impact_id)\
             .first()
     
-    def find_by_analysis_id(self, analysis_id: str) -> List[ImpactAssessment]:
-        """Trouver les analyses d'impact pour une analyse"""
-        return self.session.query(ImpactAssessment)\
-            .filter(ImpactAssessment.analysis_id == analysis_id)\
-            .all()
-    
-    def find_by_criticality(self, criticality: str) -> List[ImpactAssessment]:
+    def find_by_analysis_id(self, analysis_id: str) -> Optional[ImpactAssessment]:
         """
-        Trouver les analyses d'impact par criticité
+        Trouver l'analyse d'impact pour une analyse donnée
         
         Args:
-            criticality: CRITICAL, HIGH, MEDIUM, LOW
+            analysis_id: ID de l'analyse
         
+        Returns:
+            ImpactAssessment ou None
+        """
+        return self.session.query(ImpactAssessment)\
+            .filter(ImpactAssessment.analysis_id == analysis_id)\
+            .first()
+    
+    def list_by_impact_level(self, impact_level: str) -> List[ImpactAssessment]:
+        """
+        Lister les analyses d'impact par niveau d'impact
+
+        Args:
+            impact_level: faible, moyen, eleve
+
         Returns:
             Liste d'analyses d'impact
         """
         return self.session.query(ImpactAssessment)\
-            .filter(ImpactAssessment.criticality == criticality)\
-            .order_by(ImpactAssessment.total_score.desc())\
+            .filter(ImpactAssessment.impact_level == impact_level)\
+            .order_by(ImpactAssessment.created_at.desc())\
             .all()
-    
-    def commit(self) -> None:
-        """Commit la transaction"""
-        self.session.commit()
-    
-    def rollback(self) -> None:
-        """Rollback la transaction"""
-        self.session.rollback()
+
+    def list_by_risk_main(self, risk_main: str) -> List[ImpactAssessment]:
+        """
+        Lister les analyses d'impact par risque principal
+
+        Args:
+            risk_main: Valeur du risque principal
+
+        Returns:
+            Liste d'analyses d'impact
+        """
+        return self.session.query(ImpactAssessment)\
+            .filter(ImpactAssessment.risk_main == risk_main)\
+            .order_by(ImpactAssessment.created_at.desc())\
+            .all()
 
 
 class AlertRepository:
@@ -423,38 +337,59 @@ class AlertRepository:
         """Trouver une alerte par ID"""
         return self.session.query(Alert).filter(Alert.id == alert_id).first()
     
-    def find_pending_alerts(self) -> List[Alert]:
-        """Trouver les alertes en attente d'envoi"""
+    def find_by_impact_assessment_id(self, impact_assessment_id: str) -> List[Alert]:
+        """
+        Trouver les alertes pour un impact assessment donné
+        
+        Args:
+            impact_assessment_id: ID de l'impact assessment
+        
+        Returns:
+            Liste d'alertes
+        """
+        return self.session.query(Alert)\
+            .filter(Alert.impact_assessment_id == impact_assessment_id)\
+            .order_by(Alert.created_at.desc())\
+            .all()
+    
+    def list_unsent_alerts(self) -> List[Alert]:
+        """
+        Lister les alertes en attente d'envoi (status='pending')
+        
+        Returns:
+            Liste d'alertes non envoyées
+        """
         return self.session.query(Alert)\
             .filter(Alert.status == "pending")\
             .order_by(Alert.created_at.asc())\
             .all()
     
-    def update_status(self, alert_id: str, status: str, error_message: Optional[str] = None) -> None:
+    def mark_as_sent(self, alert_id: str) -> None:
         """
-        Mettre à jour le statut d'une alerte
+        Marquer une alerte comme envoyée
         
         Args:
             alert_id: ID de l'alerte
-            status: pending, sent, failed
-            error_message: Message d'erreur si applicable
         """
         alert = self.find_by_id(alert_id)
         if alert:
-            alert.status = status
-            if status == "sent":
-                alert.sent_at = datetime.utcnow()
-            if error_message:
-                alert.error_message = error_message
+            alert.status = "sent"
+            alert.sent_at = datetime.utcnow()
             self.session.flush()
     
-    def commit(self) -> None:
-        """Commit la transaction"""
-        self.session.commit()
-    
-    def rollback(self) -> None:
-        """Rollback la transaction"""
-        self.session.rollback()
+    def mark_as_failed(self, alert_id: str, error_message: str) -> None:
+        """
+        Marquer une alerte comme échouée
+        
+        Args:
+            alert_id: ID de l'alerte
+            error_message: Message d'erreur
+        """
+        alert = self.find_by_id(alert_id)
+        if alert:
+            alert.status = "failed"
+            alert.error_message = error_message
+            self.session.flush()
 
 
 class ExecutionLogRepository:
@@ -463,38 +398,79 @@ class ExecutionLogRepository:
     def __init__(self, session: Session):
         self.session = session
     
-    def save(self, execution_log: ExecutionLog) -> ExecutionLog:
+    def save(self, log: ExecutionLog) -> ExecutionLog:
         """Sauvegarder un log d'exécution"""
-        self.session.add(execution_log)
+        self.session.add(log)
         self.session.flush()
-        return execution_log
+        return log
     
-    def find_by_id(self, execution_log_id: str) -> Optional[ExecutionLog]:
+    def find_by_id(self, log_id: str) -> Optional[ExecutionLog]:
         """Trouver un log par ID"""
-        return self.session.query(ExecutionLog).filter(ExecutionLog.id == execution_log_id).first()
+        return self.session.query(ExecutionLog).filter(ExecutionLog.id == log_id).first()
     
-    def find_by_agent_type(self, agent_type: str) -> List[ExecutionLog]:
+    def get_last_execution(self, agent_type: str) -> Optional[ExecutionLog]:
         """
-        Trouver les logs pour un type d'agent
+        Récupérer la dernière exécution d'un agent
         
         Args:
-            agent_type: agent_1a, agent_1b, agent_2
+            agent_type: agent_1a ou agent_1b
         
         Returns:
-            Liste de logs
+            Dernier log d'exécution ou None
         """
         return self.session.query(ExecutionLog)\
             .filter(ExecutionLog.agent_type == agent_type)\
             .order_by(ExecutionLog.start_time.desc())\
-            .all()
+            .first()
     
-    def commit(self) -> None:
-        """Commit la transaction"""
-        self.session.commit()
+    def list_failed_executions(self, agent_type: Optional[str] = None) -> List[ExecutionLog]:
+        """
+        Lister les exécutions échouées
+        
+        Args:
+            agent_type: Filtrer par type d'agent (optionnel)
+        
+        Returns:
+            Liste des logs d'échec
+        """
+        query = self.session.query(ExecutionLog)\
+            .filter(ExecutionLog.status == "error")
+        
+        if agent_type:
+            query = query.filter(ExecutionLog.agent_type == agent_type)
+        
+        return query.order_by(ExecutionLog.start_time.desc()).all()
     
-    def rollback(self) -> None:
-        """Rollback la transaction"""
-        self.session.rollback()
+    def complete_execution(
+        self,
+        log_id: str,
+        status: str = "success",
+        documents_processed: int = 0,
+        documents_new: int = 0,
+        documents_modified: int = 0,
+        errors: Optional[List[str]] = None
+    ) -> None:
+        """
+        Finaliser une exécution
+        
+        Args:
+            log_id: ID du log
+            status: success ou error
+            documents_processed: Nombre total traité
+            documents_new: Nombre de nouveaux
+            documents_modified: Nombre de modifiés
+            errors: Liste d'erreurs (optionnel)
+        """
+        log = self.find_by_id(log_id)
+        if log:
+            log.status = status
+            log.end_time = datetime.utcnow()
+            log.duration_seconds = (log.end_time - log.start_time).total_seconds()
+            log.documents_processed = documents_processed
+            log.documents_new = documents_new
+            log.documents_modified = documents_modified
+            log.errors = errors or []
+            self.session.flush()
 
 
 class CompanyProfileRepository:
@@ -503,32 +479,96 @@ class CompanyProfileRepository:
     def __init__(self, session: Session):
         self.session = session
     
-    def save(self, company_profile: CompanyProfile) -> CompanyProfile:
+    def save(self, profile: CompanyProfile) -> CompanyProfile:
         """Sauvegarder un profil entreprise"""
-        self.session.add(company_profile)
+        self.session.add(profile)
         self.session.flush()
-        return company_profile
+        return profile
     
     def find_by_id(self, profile_id: str) -> Optional[CompanyProfile]:
         """Trouver un profil par ID"""
-        return self.session.query(CompanyProfile).filter(CompanyProfile.id == profile_id).first()
+        return self.session.query(CompanyProfile)\
+            .filter(CompanyProfile.id == profile_id)\
+            .first()
     
     def find_by_name(self, company_name: str) -> Optional[CompanyProfile]:
-        """Trouver un profil par nom d'entreprise"""
+        """
+        Trouver un profil par nom d'entreprise
+        
+        Args:
+            company_name: Nom de l'entreprise
+        
+        Returns:
+            Profil ou None
+        """
         return self.session.query(CompanyProfile)\
             .filter(CompanyProfile.company_name == company_name)\
             .first()
     
-    def find_active_profiles(self) -> List[CompanyProfile]:
-        """Trouver tous les profils actifs"""
+    def list_active_profiles(self) -> List[CompanyProfile]:
+        """
+        Lister tous les profils actifs
+        
+        Returns:
+            Liste de profils actifs
+        """
         return self.session.query(CompanyProfile)\
             .filter(CompanyProfile.active == True)\
             .all()
     
-    def commit(self) -> None:
-        """Commit la transaction"""
-        self.session.commit()
-    
-    def rollback(self) -> None:
-        """Rollback la transaction"""
-        self.session.rollback()
+    def update(self, profile_id: str, **kwargs) -> None:
+        """
+        Mettre à jour un profil
+        
+        Args:
+            profile_id: ID du profil
+            **kwargs: Champs à mettre à jour
+        """
+        profile = self.find_by_id(profile_id)
+        if profile:
+            for key, value in kwargs.items():
+                if hasattr(profile, key):
+                    setattr(profile, key, value)
+            profile.updated_at = datetime.utcnow()
+            self.session.flush()
+
+class CompanyProcessRepository:
+    """Repository pour gerer les donnees entreprise (company_processes)"""
+
+    def __init__(self, session: Session):
+        self.session = session
+
+    def save(self, process: CompanyProcess) -> CompanyProcess:
+        """Sauvegarder un profil entreprise"""
+        self.session.add(process)
+        self.session.flush()
+        return process
+
+    def find_by_id(self, process_id: str) -> Optional[CompanyProcess]:
+        """Trouver un profil par ID"""
+        return self.session.query(CompanyProcess)\
+            .filter(CompanyProcess.id == process_id)\
+            .first()
+
+    def find_by_name(self, company_name: str) -> Optional[CompanyProcess]:
+        """Trouver un profil par nom d'entreprise"""
+        return self.session.query(CompanyProcess)\
+            .filter(CompanyProcess.company_name == company_name)\
+            .first()
+
+    def list_all(self) -> List[CompanyProcess]:
+        """Lister tous les profils"""
+        return self.session.query(CompanyProcess)\
+            .order_by(CompanyProcess.created_at.desc())\
+            .all()
+
+    def update(self, process_id: str, **kwargs) -> None:
+        """Mettre a jour un profil"""
+        process = self.find_by_id(process_id)
+        if process:
+            for key, value in kwargs.items():
+                if hasattr(process, key):
+                    setattr(process, key, value)
+            process.updated_at = datetime.utcnow()
+            self.session.flush()
+
