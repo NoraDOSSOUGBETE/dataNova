@@ -282,3 +282,31 @@ class CompanyProcess(Base):
     def __repr__(self):
         return f"<CompanyProcess(id={self.id}, company={self.company_name})>"
 
+
+class User(Base):
+    """
+    Utilisateurs de l'application (équipe juridique et décisionnaires)
+    
+    Attributes:
+        id: Identifiant unique
+        email: Email unique (utilisé pour le login)
+        password_hash: Mot de passe hashé avec bcrypt
+        name: Nom complet de l'utilisateur
+        role: juridique ou decisive
+        is_active: Compte actif ou désactivé
+        created_at: Date de création du compte
+        last_login: Date de dernière connexion
+    """
+    __tablename__ = "users"
+    
+    id = Column(String, primary_key=True, default=generate_uuid)
+    email = Column(String(255), unique=True, nullable=False, index=True)
+    password_hash = Column(String(255), nullable=False)
+    name = Column(String(200), nullable=False)
+    role = Column(String(50), nullable=False)  # 'juridique' ou 'decisive'
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    last_login = Column(DateTime, nullable=True)
+    
+    def __repr__(self):
+        return f"<User(id={self.id}, email={self.email}, role={self.role})>"

@@ -6,12 +6,20 @@ const API_CONFIG = {
 };
 
 // Headers par défaut
-const getDefaultHeaders = () => ({
-  'Content-Type': 'application/json',
-  'Accept': 'application/json',
-  // Ajoutez ici le token d'auth si nécessaire
-  // 'Authorization': `Bearer ${getAuthToken()}`
-});
+const getDefaultHeaders = () => {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+  };
+  
+  // Ajouter le token JWT si disponible
+  const token = localStorage.getItem('auth_token');
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  
+  return headers;
+};
 
 // Fonction générique pour les appels API
 const apiCall = async (endpoint: string, options: RequestInit = {}) => {

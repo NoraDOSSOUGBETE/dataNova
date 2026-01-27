@@ -2,11 +2,18 @@
  * Service API pour l'authentification
  */
 
-import { config } from '../config/app.config';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 export interface LoginCredentials {
   email: string;
   password: string;
+}
+
+export interface RegisterData {
+  email: string;
+  password: string;
+  name: string;
+  role: 'juridique' | 'decisive';
 }
 
 export interface User {
@@ -18,100 +25,90 @@ export interface User {
 
 export interface LoginResponse {
   user: User;
-  token?: string;
+  token: string;
 }
 
 class AuthService {
   /**
-   * Connexion utilisateur
-   * TODO: Implémenter l'auth API plus tard
-   * Pour l'instant, toujours en mode mock
+   * Connexion utilisateur avec API réelle
    */
-  async login(credentials: LoginCredentials): Promise<LoginResponse> {
-    // Toujours utiliser le mock pour l'auth (API auth pas encore implémentée)
-    return this.mockLogin(credentials);
-  }
+  async login(credentials: LoginCredentials): Promise<User> {
+    const response = await fetch(`${API_URL}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(credentials),
+    });
 
-  /**
-   * Mode MOCK - Simulation de connexion
-   */
-  private async mockLogin(credentials: LoginCredentials): Promise<LoginResponse> {
-    console.log('🎭 Mode MOCK - Simulation de connexion');
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Identifiants invalides');
+    }
+
+    const data: LoginResponse = await response.json();
     
-    // Simulation d'un délai réseau
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
-    const { email } = credentials;
-
-    // Logique de connexion basée sur l'email
-    if (email.includes('juriste') || email.includes('legal')) {
-      return {
-        user: {
-          id: '1',
-          name: 'Juriste Hutchinson',
-          email: email,
-          role: 'juridique',
-        },
-      };
-    } else if (email.includes('decideur') || email.includes('decision')) {
-      return {
-        user: {
-          id: '2',
-          name: 'Décideur Hutchinson',
-          email: email,
-          role: 'decisive',
-        },
-      };
-    } else {
-      throw new Error('Utilisateur non reconnu. Utilisez un email avec "juriste" ou "decideur".');
-    }
+    // Stocker le token et l'utilisateur
+    localStorage.setItem('auth_token', data.token);
+    localStorage.setItem('user', JSON.stringify(data.user));
+    
+    return data.user;
   }
 
   /**
-   * Mode API - Appel réel au backend
+   * Inscription utilisateur
    */
-  private async apiLogin(credentials: LoginCredentials): Promise<LoginResponse> {
-    console.log('🌐 Mode API - Appel au backend:', config.apiUrl);
+  async register(data: RegisterData): Promise<User> {
+    const response = await fetch(`${API_URL}/api/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
 
-    try {
-      const response = await fetch(`${config.apiUrl}/api/auth/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(credentials),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Erreur de connexion');
+    if (!response.ok) {
+      const error = await response.json();
+      // Gérer les erreurs de validation Pydantic (detail peut être un tableau)
+      let errorMessage = 'Erreur lors de l\'inscription';
+      if (error.detail) {
+        if (typeof error.detail === 'string') {
+          errorMessage = error.detail;
+        } else if (Array.isArray(error.detail)) {
+          // Erreurs de validation Pydantic
+          errorMessage = error.detail.map((e: any) => e.msg || e.message).join(', ');
+        }
       }
-
-      const data = await response.json();
-      
-      return {
-        user: data.user,
-        token: data.token,
-      };
-    } catch (error) {
-      console.error('❌ Erreur API:', error);
-      throw new Error(
-        error instanceof Error 
-          ? error.message 
-          : 'Impossible de se connecter au serveur'
-      );
+      throw new Error(errorMessage);
     }
+
+    return await response.json();
   }
 
   /**
    * Déconnexion
    */
-  async logout(): Promise<void> {
-    if (config.isApiMode()) {
-      // Appel API de déconnexion si nécessaire
-      console.log('🌐 Déconnexion API');
-    }
-    // Nettoyer le token local, etc.
+  logout(): void {
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('user');
+  }
+
+  /**
+   * Récupère le token
+   */
+  getToken(): string | null {
+    return localStorage.getItem('auth_token');
+  }
+
+  /**
+   * Récupère l'utilisateur connecté
+   */
+  getUser(): User | null {
+    const userStr = localStorage.getItem('user');
+    return userStr ? JSON.parse(userStr) : null;
+  }
+
+  /**
+   * Vérifie si l'utilisateur est authentifié
+   */
+  isAuthenticated(): boolean {
+    return !!this.getToken();
   }
 }
 

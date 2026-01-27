@@ -18,7 +18,7 @@ interface UseRegulationsFilters {
 }
 
 export const useMockRegulations = (filters: UseRegulationsFilters = {}): UseRegulationsState => {
-  const [regulations, setRegulations] = useState<Regulation[]>(mockRegulations);
+  const [regulations] = useState<Regulation[]>(mockRegulations);
   const [loading, setLoading] = useState(false);
 
   const filteredRegulations = useMemo(() => {
@@ -40,14 +40,6 @@ export const useMockRegulations = (filters: UseRegulationsFilters = {}): UseRegu
 
     return filtered;
   }, [regulations, filters.status, filters.search]);
-
-  const updateRegulation = useCallback((id: string, updates: Partial<Regulation>) => {
-    setRegulations(prev => 
-      prev.map(reg => 
-        reg.id === id ? { ...reg, ...updates } : reg
-      )
-    );
-  }, []);
 
   const refetch = useCallback(() => {
     // Simuler un rechargement
@@ -76,9 +68,9 @@ export const useMockRegulationActions = (onSuccess?: () => void): UseRegulationA
   const [updating, setUpdating] = useState(false);
 
   const updateStatus = useCallback(async (
-    id: string, 
-    status: 'validated' | 'rejected' | 'to-review',
-    comment?: string
+    _id: string, 
+    _status: 'validated' | 'rejected' | 'to-review',
+    _comment?: string
   ) => {
     setUpdating(true);
 

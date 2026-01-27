@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
 import { User, Lock, Eye, EyeOff } from 'lucide-react';
 import { authService } from '../services/auth.service';
-import { config } from '../config/app.config';
 import './LoginPage.css';
 
 interface LoginPageProps {
   onLogin: (userType: 'juridique' | 'decisive', userData: any) => void;
+  onShowRegister?: () => void;
 }
 
-export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
+export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onShowRegister }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -21,14 +21,14 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
     setError('');
 
     try {
-      // Utilise authService qui gère mock ou API selon la config
-      const response = await authService.login({
+      // Utilise authService qui appelle l'API backend
+      const user = await authService.login({
         email,
         password,
       });
 
       // Connexion réussie
-      onLogin(response.user.role, response.user);
+      onLogin(user.role, user);
       
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erreur de connexion. Veuillez réessayer.');
@@ -99,21 +99,15 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
 
           <div className="login-footer">
             <a href="#" className="forgot-password">Mot de passe oublié ?</a>
+            {onShowRegister && (
+              <p className="register-link">
+                Pas encore de compte ? <a href="#" onClick={(e) => { e.preventDefault(); onShowRegister(); }}>S'inscrire</a>
+              </p>
+            )}
           </div>
         </form>
 
-        <div className="demo-info">
-          <p><strong>Mode: {config.mode.toUpperCase()}</strong></p>
-          {config.isMockMode() && (
-            <>
-              <p>• juriste@hutchinson.com → Interface Juridique</p>
-              <p>• decideur@hutchinson.com → Dashboard Décideur</p>
-            </>
-          )}
-          {config.isApiMode() && (
-            <p>• Connecté au backend: {config.apiUrl}</p>
-          )}
-        </div>
+
       </div>
 
       <div className="login-background">

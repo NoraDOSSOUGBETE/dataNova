@@ -12,7 +12,6 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./backend/scripts/init_postgres.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - datanova_network
     healthcheck:
@@ -28,11 +27,11 @@ services:
       dockerfile: Dockerfile
     container_name: datanova_backend
     restart: unless-stopped
-    env_file:
-      - ./backend/.env
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-datanova}:${POSTGRES_PASSWORD:-datanova_password}@postgres:5432/${POSTGRES_DB:-datanova}
+      - DATABASE_URL=postgresql://datanova:datanova_password@postgres:5432/datanova
       - PYTHONUNBUFFERED=1
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
     ports:
       - "8000:8000"
     volumes:

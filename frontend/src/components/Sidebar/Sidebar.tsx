@@ -1,5 +1,5 @@
 import React from 'react';
-import { FileText, User, LogOut, Search, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { FileText, User, LogOut, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 import './Sidebar.css';
 
 interface SidebarProps {

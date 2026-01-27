@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { useState } from 'react';
 import { LoginPage } from './pages/LoginPage';
+import { RegisterPage } from './pages/RegisterPage';
 import { LegalTeamPage } from './pages/LegalTeamPage';
 import { DecisionDashboard } from './pages/DecisionDashboard';
 import { User } from './types';
@@ -8,6 +8,7 @@ import './App.css';
 
 function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [showRegister, setShowRegister] = useState(false);
 
   const handleLogin = (userType: 'juridique' | 'decisive', userData: any) => {
     const user: User = {
@@ -19,13 +20,12 @@ function App() {
     setCurrentUser(user);
   };
 
-  const handleLogout = () => {
-    setCurrentUser(null);
-  };
-
-  // Si pas connecté, afficher la page de connexion
+  // Si pas connecté, afficher la page de connexion ou inscription
   if (!currentUser) {
-    return <LoginPage onLogin={handleLogin} />;
+    if (showRegister) {
+      return <RegisterPage onRegisterSuccess={() => setShowRegister(false)} />;
+    }
+    return <LoginPage onLogin={handleLogin} onShowRegister={() => setShowRegister(true)} />;
   }
 
   // Redirection selon le rôle

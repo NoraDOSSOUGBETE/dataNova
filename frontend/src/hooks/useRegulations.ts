@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
 import { regulationsService, RegulationResponse } from '../services/regulationsService';
-import { mockRegulations } from '../data/mockData';
 import { Regulation } from '../types';
 
 interface UseRegulationsState {
@@ -33,25 +32,10 @@ export const useRegulations = (filters: UseRegulationsFilters = {}): UseRegulati
       setRegulations(response.regulations);
       setTotal(response.total);
     } catch (err) {
-      console.warn('API non disponible, utilisation des données mock:', err);
-      
-      // Filtrer les mock data selon les filtres
-      let filteredMockData = mockRegulations;
-      
-      if (filters.status && filters.status !== 'all') {
-        filteredMockData = mockRegulations.filter(reg => reg.status === filters.status);
-      }
-      
-      if (filters.search) {
-        filteredMockData = filteredMockData.filter(reg =>
-          reg.title.toLowerCase().includes(filters.search!.toLowerCase()) ||
-          reg.description.toLowerCase().includes(filters.search!.toLowerCase())
-        );
-      }
-      
-      setRegulations(filteredMockData);
-      setTotal(filteredMockData.length);
-      setError('Mode démo - Backend non connecté');
+      console.error('Erreur API:', err);
+      setError(err instanceof Error ? err.message : 'Erreur de connexion au serveur');
+      setRegulations([]);
+      setTotal(0);
     } finally {
       setLoading(false);
     }

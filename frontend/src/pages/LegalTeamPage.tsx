@@ -6,7 +6,7 @@ import { RegulationCard } from '../components/RegulationCard/RegulationCard';
 import { Sidebar } from '../components/Sidebar/Sidebar';
 import { AdvancedFilters, FilterOptions } from '../components/AdvancedFilters/AdvancedFilters';
 import { useRegulations, useRegulationActions } from '../hooks/useRegulations';
-import { downloadValidatedRegulationsJSON, copyValidatedRegulationsJSON, logValidatedRegulationsJSON } from '../utils/exportData';
+import { downloadValidatedRegulationsJSON, copyValidatedRegulationsJSON } from '../utils/exportData';
 import './LegalTeamPage.css';
 
 export const LegalTeamPage: React.FC = () => {
@@ -68,10 +68,6 @@ export const LegalTeamPage: React.FC = () => {
       setCopySuccess(true);
       setTimeout(() => setCopySuccess(false), 2000);
     }
-  };
-
-  const handleLogJSON = () => {
-    logValidatedRegulationsJSON();
   };
 
   const handleResetFilters = () => {
