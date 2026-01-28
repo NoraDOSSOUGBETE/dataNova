@@ -8,13 +8,15 @@ interface RegulationCardProps {
   onValidate: (id: string) => void;
   onReject: (id: string) => void;
   onReview: (id: string) => void;
+  disabled?: boolean;
 }
 
 export const RegulationCard: React.FC<RegulationCardProps> = ({
   regulation,
   onValidate,
   onReject,
-  onReview
+  onReview,
+  // disabled prop available but not used yet
 }) => {
   const getStatusIcon = () => {
     switch (regulation.status) {

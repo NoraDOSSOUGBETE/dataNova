@@ -24,7 +24,7 @@ def get_database_url() -> str:
     Returns:
         URL de connexion
     """
-    db_url = getattr(settings, 'DATABASE_URL', None)
+    db_url = getattr(settings, 'database_url', None)
     
     if db_url:
         return db_url
@@ -49,6 +49,11 @@ def create_db_engine():
         Engine SQLAlchemy
     """
     database_url = get_database_url()
+    
+    # Log pour savoir quelle base est utilisée
+    db_type = "PostgreSQL" if database_url.startswith("postgresql") else "SQLite"
+    print(f"🗄️  DATABASE: {db_type}")
+    print(f"   URL: {database_url.split('@')[-1] if '@' in database_url else database_url}")
     
     if database_url.startswith("sqlite"):
         # SQLite: pool statique + echo pour debug

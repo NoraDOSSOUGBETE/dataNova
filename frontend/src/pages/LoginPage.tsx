@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { User, Lock, Eye, EyeOff } from 'lucide-react';
+import { authService } from '../services/auth.service';
 import './LoginPage.css';
 
 interface LoginPageProps {
   onLogin: (userType: 'juridique' | 'decisive', userData: any) => void;
+  onShowRegister?: () => void;
 }
 
-export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
+export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onShowRegister }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -19,29 +21,17 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
     setError('');
 
     try {
-      // Simulation de la connexion - remplacer par vraie API
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Utilise authService qui appelle l'API backend
+      const user = await authService.login({
+        email,
+        password,
+      });
 
-      // Logique de connexion basée sur l'email
-      if (email.includes('juriste') || email.includes('legal')) {
-        onLogin('juridique', {
-          id: '1',
-          name: 'Juriste Hutchinson',
-          email: email,
-          role: 'juridique'
-        });
-      } else if (email.includes('decideur') || email.includes('decision')) {
-        onLogin('decisive', {
-          id: '2', 
-          name: 'Décideur Hutchinson',
-          email: email,
-          role: 'decisive'
-        });
-      } else {
-        setError('Utilisateur non reconnu. Utilisez un email avec "juriste" ou "decideur".');
-      }
+      // Connexion réussie
+      onLogin(user.role, user);
+      
     } catch (err) {
-      setError('Erreur de connexion. Veuillez réessayer.');
+      setError(err instanceof Error ? err.message : 'Erreur de connexion. Veuillez réessayer.');
     } finally {
       setLoading(false);
     }
@@ -109,14 +99,15 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
 
           <div className="login-footer">
             <a href="#" className="forgot-password">Mot de passe oublié ?</a>
+            {onShowRegister && (
+              <p className="register-link">
+                Pas encore de compte ? <a href="#" onClick={(e) => { e.preventDefault(); onShowRegister(); }}>S'inscrire</a>
+              </p>
+            )}
           </div>
         </form>
 
-        <div className="demo-info">
-          <p><strong>Demo:</strong></p>
-          <p>• juriste@hutchinson.com → Interface Juridique</p>
-          <p>• decideur@hutchinson.com → Dashboard Décideur</p>
-        </div>
+
       </div>
 
       <div className="login-background">

@@ -75,7 +75,7 @@ export const getValidatedRegulationsJSON = (): ValidatedRegulationJSON[] => {
     .map(reg => ({
       document_id: reg.id,
       title: reg.title,
-      reference: reg.reference,
+      reference: reg.reference || '',
       regulation_type: reg.type,
       source_url: `https://eur-lex.europa.eu/legal-content/FR/TXT/?uri=CELEX:${reg.reference}`,
       publication_date: reg.dateCreated.toISOString(),

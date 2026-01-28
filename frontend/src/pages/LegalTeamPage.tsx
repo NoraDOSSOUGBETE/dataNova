@@ -6,7 +6,8 @@ import { RegulationCard } from '../components/RegulationCard/RegulationCard';
 import { Sidebar } from '../components/Sidebar/Sidebar';
 import { AdvancedFilters, FilterOptions } from '../components/AdvancedFilters/AdvancedFilters';
 import { useRegulations, useRegulationActions } from '../hooks/useRegulations';
-import { downloadValidatedRegulationsJSON, copyValidatedRegulationsJSON, logValidatedRegulationsJSON } from '../utils/exportData';
+import { downloadValidatedRegulationsJSON, copyValidatedRegulationsJSON } from '../utils/exportData';
+import { authService } from '../services/auth.service';
 import './LegalTeamPage.css';
 
 export const LegalTeamPage: React.FC = () => {
@@ -68,10 +69,6 @@ export const LegalTeamPage: React.FC = () => {
       setCopySuccess(true);
       setTimeout(() => setCopySuccess(false), 2000);
     }
-  };
-
-  const handleLogJSON = () => {
-    logValidatedRegulationsJSON();
   };
 
   const handleResetFilters = () => {
@@ -238,7 +235,8 @@ export const LegalTeamPage: React.FC = () => {
               className="disconnect-btn"
               onClick={() => {
                 if (confirm('Êtes-vous sûr de vouloir vous déconnecter ?')) {
-                  alert('Déconnexion réussie');
+                  authService.logout();
+                  window.location.reload();
                 }
               }}
             >

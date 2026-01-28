@@ -8,7 +8,15 @@ Documentation: docs/DATABASE_SCHEMA.md
 from typing import List, Optional
 from datetime import datetime
 from sqlalchemy.orm import Session
-from src.storage.models import Document, Analysis, Alert, ExecutionLog, CompanyProfile, ImpactAssessment
+from src.storage.models import (
+    Document,
+    Analysis,
+    Alert,
+    ExecutionLog,
+    CompanyProfile,
+    CompanyProcess,
+    ImpactAssessment,
+)
 
 
 class DocumentRepository:
@@ -50,22 +58,85 @@ class DocumentRepository:
         return self.session.query(Document)\
             .filter(Document.hash_sha256 == hash_sha256)\
             .first()
-
+    
     def find_by_url(self, source_url: str) -> Optional[Document]:
-    """
-    Trouver un document par son URL source
+        """
+        Trouver un document par son URL source
+        
+        Args:
+            source_url: URL du document
+        
+        Returns:
+            Document ou None
+        """
+        return self.session.query(Document)\
+            .filter(Document.source_url == source_url)\
+            .first()
     
-    Usage: Vérifier si un document existe déjà (utilisé par change_detector)
-    
-    Args:
-        source_url: URL source du document (EUR-Lex)
-    
-    Returns:
-        Document ou None
-    """
-    return self.session.query(Document)\
-        .filter(Document.source_url == source_url)\
-        .first()
+    def upsert_document(
+        self,
+        source_url: str,
+        hash_sha256: str,
+        title: str,
+        content: str,
+        nc_codes: Optional[list] = None,
+        regulation_type: str = "CBAM",
+        publication_date: Optional[datetime] = None,
+        document_metadata: Optional[dict] = None
+    ) -> tuple[Document, str]:
+        """
+        Insérer ou mettre à jour un document (upsert)
+        
+        Args:
+            source_url: URL source du document
+            hash_sha256: Hash SHA-256 du contenu
+            title: Titre du document
+            content: Contenu textuel extrait
+            nc_codes: Liste des codes NC trouvés
+            regulation_type: Type de réglementation
+            publication_date: Date de publication
+            document_metadata: Métadonnées additionnelles
+        
+        Returns:
+            Tuple (document, status) où status est "new", "modified" ou "unchanged"
+        """
+        existing = self.find_by_url(source_url)
+        
+        if existing:
+            # Document existant - vérifier si modifié
+            if existing.hash_sha256 != hash_sha256:
+                existing.status = "modified"
+                existing.content = content
+                existing.hash_sha256 = hash_sha256
+                existing.nc_codes = nc_codes
+                existing.document_metadata = document_metadata
+                existing.last_checked = datetime.utcnow()
+                self.session.flush()
+                return (existing, "modified")
+            else:
+                existing.status = "unchanged"
+                existing.last_checked = datetime.utcnow()
+                self.session.flush()
+                return (existing, "unchanged")
+        else:
+            # Nouveau document
+            document = Document(
+                source_url=source_url,
+                hash_sha256=hash_sha256,
+                title=title,
+                content=content,
+                nc_codes=nc_codes,
+                regulation_type=regulation_type,
+                publication_date=publication_date,
+                document_metadata=document_metadata,
+                status="new",
+                workflow_status="raw",
+                first_seen=datetime.utcnow(),
+                last_checked=datetime.utcnow()
+            )
+            self.session.add(document)
+            self.session.flush()
+            return (document, "new")
     
     def list_new_documents(self, limit: int = 50) -> List[Document]:
         """
@@ -171,135 +242,6 @@ class DocumentRepository:
             if validated_by:
                 document.validated_by = validated_by
             self.session.flush()
-    
-    def find_by_url(self, source_url: str) -> Optional[Document]:
-        """
-        Trouver un document par son URL source
-        
-        Usage: Vérifier si un document existe déjà (utilisé par change_detector)
-        
-        Args:
-            source_url: URL source du document (EUR-Lex)
-        
-        Returns:
-            Document ou None
-        """
-        return self.session.query(Document)\
-            .filter(Document.source_url == source_url)\
-            .first()
-    
-    def upsert_document(
-        self,
-        source_url: str,
-        hash_sha256: str,
-        title: str,
-        content: str,
-        nc_codes: List[str],
-        regulation_type: str,
-        publication_date: Optional[datetime] = None,
-        document_metadata: Optional[dict] = None
-    ) -> tuple[Document, str]:
-        """
-        Insert ou Update un document (détection automatique nouveau/modifié/inchangé)
-        
-        Logique:
-        1. Chercher par hash → Si trouvé = contenu inchangé
-        2. Chercher par URL → Si trouvé = contenu modifié
-        3. Sinon → Nouveau document
-        
-        Args:
-            source_url: URL source du document
-            hash_sha256: Hash SHA-256 du contenu
-            title: Titre du document
-            content: Contenu extrait
-            nc_codes: Liste des codes NC trouvés
-            regulation_type: Type de réglementation (CBAM, EUDR, etc.)
-            publication_date: Date de publication (optionnel)
-            document_metadata: Métadonnées diverses (optionnel)
-        
-        Returns:
-            Tuple (Document, status) où status = "new" | "modified" | "unchanged"
-        
-        Usage Agent 1A:
-            doc, status = repo.upsert_document(
-                source_url=url,
-                hash_sha256=hash,
-                title=title,
-                content=text,
-                nc_codes=codes,
-                regulation_type="CBAM"
-            )
-            print(f"Document {status}: {doc.title}")
-        """
-        # Étape 1: Chercher par hash (contenu identique ?)
-        existing = self.find_by_hash(hash_sha256)
-        
-        if existing:
-            # Document existe avec même contenu = inchangé
-            existing.last_checked = datetime.utcnow()
-            existing.status = "unchanged"
-            self.session.flush()
-            return (existing, "unchanged")
-        
-        # Étape 2: Chercher par URL (même document, contenu différent ?)
-        existing_url = self.find_by_url(source_url)
-        
-        if existing_url:
-            # Document modifié (nouveau contenu)
-            existing_url.hash_sha256 = hash_sha256
-            existing_url.content = content
-            existing_url.nc_codes = nc_codes
-            existing_url.title = title
-            existing_url.publication_date = publication_date
-            existing_url.document_metadata = document_metadata or {}
-            existing_url.status = "modified"
-            existing_url.workflow_status = "raw"  # À réanalyser
-            existing_url.last_checked = datetime.utcnow()
-            self.session.flush()
-            return (existing_url, "modified")
-        
-        # Étape 3: Nouveau document
-        from src.storage.models import Document as DocumentModel
-        
-        doc = DocumentModel(
-            title=title,
-            source_url=source_url,
-            hash_sha256=hash_sha256,
-            content=content,
-            nc_codes=nc_codes,
-            regulation_type=regulation_type,
-            publication_date=publication_date,
-            document_metadata=document_metadata or {},
-            status="new",
-            workflow_status="raw"
-        )
-        self.session.add(doc)
-        self.session.flush()
-        return (doc, "new")
-    
-    def commit(self) -> None:
-        """
-        Helper pour commit la transaction
-        
-        Usage:
-            doc, status = repo.upsert_document(...)
-            repo.commit()
-        """
-        self.session.commit()
-    
-    def rollback(self) -> None:
-        """
-        Helper pour rollback la transaction en cas d'erreur
-        
-        Usage:
-            try:
-                doc = repo.upsert_document(...)
-                repo.commit()
-            except Exception:
-                repo.rollback()
-                raise
-        """
-        self.session.rollback()
 
 
 class AnalysisRepository:
@@ -332,83 +274,6 @@ class AnalysisRepository:
             .filter(Analysis.document_id == document_id)\
             .order_by(Analysis.created_at.desc())\
             .first()
-    def upsert_document(
-    self,
-    source_url: str,
-    hash_sha256: str,
-    title: str,
-    content: str,
-    nc_codes: List[str],
-    regulation_type: str,
-    publication_date: Optional[datetime] = None,
-    document_metadata: Optional[dict] = None
-) -> tuple[Document, str]:
-    """
-    Insert ou Update un document (détection automatique nouveau/modifié/inchangé)
-    
-    Logique:
-    1. Chercher par hash → Si trouvé = contenu inchangé
-    2. Chercher par URL → Si trouvé = contenu modifié
-    3. Sinon → Nouveau document
-    
-    Returns:
-        Tuple (Document, status) où status = "new" | "modified" | "unchanged"
-    
-    Usage Agent 1A:
-        doc, status = repo.upsert_document(
-            source_url=url,
-            hash_sha256=hash,
-            title=title,
-            content=text,
-            nc_codes=codes,
-            regulation_type="CBAM"
-        )
-    """
-    # 1. Chercher par hash (contenu identique ?)
-    existing = self.find_by_hash(hash_sha256)
-    
-    if existing:
-        # Document existe avec même contenu = inchangé
-        existing.last_checked = datetime.utcnow()
-        existing.status = "unchanged"
-        self.session.flush()
-        return (existing, "unchanged")
-    
-    # 2. Chercher par URL (même document, contenu différent ?)
-    existing_url = self.find_by_url(source_url)
-    
-    if existing_url:
-        # Document modifié (nouveau contenu)
-        existing_url.hash_sha256 = hash_sha256
-        existing_url.content = content
-        existing_url.nc_codes = nc_codes
-        existing_url.title = title
-        existing_url.publication_date = publication_date
-        existing_url.document_metadata = document_metadata or {}
-        existing_url.status = "modified"
-        existing_url.workflow_status = "raw"  # À réanalyser
-        existing_url.last_checked = datetime.utcnow()
-        self.session.flush()
-        return (existing_url, "modified")
-    
-    # 3. Nouveau document
-    from src.storage.models import Document as DocumentModel
-    
-    doc = DocumentModel(
-        title=title,
-        source_url=source_url,
-        hash_sha256=hash_sha256,
-        content=content,
-        nc_codes=nc_codes,
-        regulation_type=regulation_type,
-        publication_date=publication_date,
-        document_metadata=document_metadata or {},
-        status="new",
-        workflow_status="raw"
-    )
-    self.session.add(doc)
-    self.session.flush()
-    return (doc, "new")
     
     def list_relevant_analyses(self, validation_status: str = "approved") -> List[Analysis]:
         """
@@ -504,34 +369,34 @@ class ImpactAssessmentRepository:
             .filter(ImpactAssessment.analysis_id == analysis_id)\
             .first()
     
-    def list_by_criticality(self, criticality: str) -> List[ImpactAssessment]:
+    def list_by_impact_level(self, impact_level: str) -> List[ImpactAssessment]:
         """
-        Lister les analyses d'impact par criticité
-        
+        Lister les analyses d'impact par niveau d'impact
+
         Args:
-            criticality: CRITICAL, HIGH, MEDIUM, LOW
-        
+            impact_level: faible, moyen, eleve
+
         Returns:
             Liste d'analyses d'impact
         """
         return self.session.query(ImpactAssessment)\
-            .filter(ImpactAssessment.criticality == criticality)\
+            .filter(ImpactAssessment.impact_level == impact_level)\
             .order_by(ImpactAssessment.created_at.desc())\
             .all()
-    
-    def list_high_priority(self, min_score: float = 0.7) -> List[ImpactAssessment]:
+
+    def list_by_risk_main(self, risk_main: str) -> List[ImpactAssessment]:
         """
-        Lister les analyses d'impact haute priorité
-        
+        Lister les analyses d'impact par risque principal
+
         Args:
-            min_score: Score minimum (0-1)
-        
+            risk_main: Valeur du risque principal
+
         Returns:
             Liste d'analyses d'impact
         """
         return self.session.query(ImpactAssessment)\
-            .filter(ImpactAssessment.total_score >= min_score)\
-            .order_by(ImpactAssessment.total_score.desc())\
+            .filter(ImpactAssessment.risk_main == risk_main)\
+            .order_by(ImpactAssessment.created_at.desc())\
             .all()
 
 
@@ -744,4 +609,44 @@ class CompanyProfileRepository:
                 if hasattr(profile, key):
                     setattr(profile, key, value)
             profile.updated_at = datetime.utcnow()
+            self.session.flush()
+
+class CompanyProcessRepository:
+    """Repository pour gerer les donnees entreprise (company_processes)"""
+
+    def __init__(self, session: Session):
+        self.session = session
+
+    def save(self, process: CompanyProcess) -> CompanyProcess:
+        """Sauvegarder un profil entreprise"""
+        self.session.add(process)
+        self.session.flush()
+        return process
+
+    def find_by_id(self, process_id: str) -> Optional[CompanyProcess]:
+        """Trouver un profil par ID"""
+        return self.session.query(CompanyProcess)\
+            .filter(CompanyProcess.id == process_id)\
+            .first()
+
+    def find_by_name(self, company_name: str) -> Optional[CompanyProcess]:
+        """Trouver un profil par nom d'entreprise"""
+        return self.session.query(CompanyProcess)\
+            .filter(CompanyProcess.company_name == company_name)\
+            .first()
+
+    def list_all(self) -> List[CompanyProcess]:
+        """Lister tous les profils"""
+        return self.session.query(CompanyProcess)\
+            .order_by(CompanyProcess.created_at.desc())\
+            .all()
+
+    def update(self, process_id: str, **kwargs) -> None:
+        """Mettre a jour un profil"""
+        process = self.find_by_id(process_id)
+        if process:
+            for key, value in kwargs.items():
+                if hasattr(process, key):
+                    setattr(process, key, value)
+            process.updated_at = datetime.utcnow()
             self.session.flush()
