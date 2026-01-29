@@ -96,7 +96,7 @@ class Document(Base):
     content = Column(Text, nullable=True)
     summary = Column(Text, nullable=True)
     geographic_scope = Column(JSON, nullable=True)  # {countries: [], regions: [], coordinates: {}}
-    metadata = Column(JSON, nullable=True)
+    extra_metadata = Column(JSON, nullable=True)
     status = Column(String(20), nullable=False, default="new")  # new, modified, unchanged
     first_seen = Column(DateTime, nullable=False, default=datetime.utcnow)
     last_checked = Column(DateTime, nullable=False, default=datetime.utcnow)
@@ -136,7 +136,7 @@ class HutchinsonSite(Base):
     employee_count = Column(Integer, nullable=True)
     annual_production_value = Column(Float, nullable=True)  # en euros
     strategic_importance = Column(String(20), nullable=True)  # faible, moyen, fort, critique
-    metadata = Column(JSON, nullable=True)
+    extra_metadata = Column(JSON, nullable=True)
     active = Column(Boolean, default=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -165,7 +165,7 @@ class Supplier(Base):
     company_size = Column(String(20), nullable=True)  # PME, ETI, Grand groupe
     certifications = Column(JSON, nullable=True)
     financial_health = Column(String(20), nullable=True)  # excellent, bon, moyen, faible
-    metadata = Column(JSON, nullable=True)
+    extra_metadata = Column(JSON, nullable=True)
     active = Column(Boolean, default=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -192,7 +192,7 @@ class SupplierRelationship(Base):
     lead_time_days = Column(Integer, nullable=True)  # Délai de livraison en jours
     contract_end_date = Column(Date, nullable=True)
     risk_mitigation_plan = Column(Text, nullable=True)
-    metadata = Column(JSON, nullable=True)
+    extra_metadata = Column(JSON, nullable=True)
     active = Column(Boolean, default=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -382,7 +382,7 @@ class GroundTruthCase(Base):
     expert_recommendations = Column(Text, nullable=False)
     expert_name = Column(String(200), nullable=False)
     validated_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    metadata = Column(JSON, nullable=True)
+    extra_metadata = Column(JSON, nullable=True)
     
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     
@@ -482,6 +482,6 @@ class ExecutionLog(Base):
     status = Column(String(20), nullable=False)  # success, error, warning
     error_message = Column(Text, nullable=True)
     execution_time_ms = Column(Integer, nullable=True)
-    metadata = Column(JSON, nullable=True)
+    extra_metadata = Column(JSON, nullable=True)
     
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
