@@ -171,8 +171,11 @@ class Supplier(Base):
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relations
-    supplier_relationships = relationship("SupplierRelationship", back_populates="supplier")
-
+    supplier_relationships = relationship(
+        "SupplierRelationship",
+        foreign_keys="SupplierRelationship.supplier_id",
+        back_populates="supplier"
+    )
 
 class SupplierRelationship(Base):
     """
