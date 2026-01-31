@@ -96,10 +96,22 @@ class RegulatoryEngine:
                     matching_criteria.append(f"secteur:{sector}")
             
             # Vérifier les produits
-            site_products = site.get('main_products', [])
+            # Vérifier les produits fabriqués
+            site_products = site.get('products', [])
             for product in site_products:
-                if product.lower().strip() in reg_products:
+                product_lower = product.lower().strip()
+                # Matching flexible : substring match
+                if any(reg_prod in product_lower or product_lower in reg_prod for reg_prod in reg_products):
                     matching_criteria.append(f"produit:{product}")
+
+            # Vérifier les matières premières (IMPORTANT pour CBAM !)
+            site_raw_materials = site.get('raw_materials', [])
+            for material in site_raw_materials:
+                material_lower = material.lower().strip()
+                # Matching flexible : substring match
+                if any(reg_prod in material_lower or material_lower in reg_prod for reg_prod in reg_products):
+                    matching_criteria.append(f"matière_première:{material}")
+
             
             # Si au moins un critère correspond
             if matching_criteria:
@@ -132,10 +144,14 @@ class RegulatoryEngine:
                 matching_criteria.append(f"secteur:{supplier_sector}")
             
             # Vérifier les produits
+            # Vérifier les produits fournis
             supplier_products = supplier.get('products_supplied', [])
             for product in supplier_products:
-                if product.lower().strip() in reg_products:
+                product_lower = product.lower().strip()
+                # Matching flexible : substring match
+                if any(reg_prod in product_lower or product_lower in reg_prod for reg_prod in reg_products):
                     matching_criteria.append(f"produit:{product}")
+
             
             # Si au moins un critère correspond
             if matching_criteria:

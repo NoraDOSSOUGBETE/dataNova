@@ -1,3 +1,5 @@
+from dotenv import load_dotenv
+load_dotenv()  # Charge automatiquement le fichier .env
 """
 Agent 2 - Risk Analyzer
 
@@ -178,9 +180,9 @@ class Agent2:
         geographic_scope = document.get('geographic_scope', {})
         
         # Extraire les critères réglementaires
-        countries = geographic_scope.get('countries', [])
-        # On pourrait aussi extraire sectors et products du document
-        # Pour l'instant, on utilise ce qui est disponible
+        countries = geographic_scope.get('affected_countries', [])
+        sectors = geographic_scope.get('affected_sectors', [])
+        products = geographic_scope.get('affected_products', [])
         
         if not countries:
             return {
@@ -193,15 +195,16 @@ class Agent2:
         # Analyser l'impact réglementaire
         result = self.regulatory_engine.find_affected_by_regulation(
             regulation_countries=countries,
-            regulation_sectors=None,  # À extraire du document si disponible
-            regulation_products=None,  # À extraire du document si disponible
+            regulation_sectors=sectors if sectors else None,
+            regulation_products=products if products else None,
             sites=sites,
             suppliers=suppliers
         )
         
         result['method'] = "regulatory"
         return result
-    
+        
+        
     def _project_geopolitical_event(
         self,
         document: Dict,
@@ -212,10 +215,10 @@ class Agent2:
         geographic_scope = document.get('geographic_scope', {})
         
         # Extraire les pays affectés
-        affected_countries = geographic_scope.get('countries', [])
-        neighboring_countries = geographic_scope.get('regions', [])  # Approximation
+        directly_affected = geographic_scope.get('directly_affected_countries', [])
+        indirectly_affected = geographic_scope.get('indirectly_affected_countries', [])
         
-        if not affected_countries:
+        if not directly_affected:
             return {
                 "method": "geopolitical",
                 "error": "Pays affectés non spécifiés",
@@ -227,8 +230,8 @@ class Agent2:
         
         # Analyser l'impact géopolitique
         result = self.geopolitical_engine.find_affected_by_geopolitical_event(
-            affected_countries=affected_countries,
-            neighboring_countries=neighboring_countries,
+            affected_countries=directly_affected,
+            neighboring_countries=indirectly_affected,
             event_type=event_subtype,
             sites=sites,
             suppliers=suppliers
@@ -236,6 +239,7 @@ class Agent2:
         
         result['method'] = "geopolitical"
         return result
+
     
     def _analyze_criticality(
         self,

@@ -8,9 +8,9 @@
 
 Agent 2 est le cœur de PING. Il analyse l'impact d'un événement sur la supply chain de Hutchinson en 3 étapes :
 
-1.  **Projection Multi-Mode**: Identifie les sites et fournisseurs impactés selon le type de risque.
-2.  **Analyse de Criticité**: Évalue la criticité de chaque entité impactée.
-3.  **Raisonnement LLM en Cascade**: Analyse l'impact complet sur toute la chaîne et génère des recommandations.
+1. **Projection Multi-Mode**: Identifie les sites et fournisseurs impactés selon le type de risque.
+2. **Analyse de Criticité**: Évalue la criticité de chaque entité impactée.
+3.**Raisonnement LLM en Cascade**: Analyse l'impact complet sur toute la chaîne et génère des recommandations.
 
 ## 📊 Architecture
 
@@ -37,6 +37,7 @@ Le raisonnement LLM utilise des prompts spécifiques pour chaque type de risque 
 ### 1. Prompt Climatique 🌧️
 
 Focus sur :
+
 - Durée de la perturbation
 - Impact logistique (routes, transports)
 - Délai avant rupture de stock
@@ -46,6 +47,7 @@ Focus sur :
 ### 2. Prompt Réglementaire 📋
 
 Focus sur :
+
 - Applicabilité et conformité actuelle
 - Coûts de mise en conformité
 - Délai légal pour se conformer
@@ -55,6 +57,7 @@ Focus sur :
 ### 3. Prompt Géopolitique 🌍
 
 Focus sur :
+
 - Sanctions économiques
 - Fermeture de frontières
 - Routes commerciales perturbées
@@ -98,9 +101,9 @@ print(result)
 
 Le fichier `test_agent_2.py` contient 3 scénarios de test complets :
 
-1.  **Inondation Bangkok** (climatique)
-2.  **CBAM Europe** (réglementaire)
-3.  **Conflit Ukraine** (géopolitique)
+1. **Inondation Bangkok** (climatique)
+2.**CBAM Europe** (réglementaire)
+3.**Conflit Ukraine** (géopolitique)
 
 Pour lancer les tests :
 

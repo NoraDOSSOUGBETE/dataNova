@@ -15,7 +15,6 @@ import json
 import sys
 from pathlib import Path
 from datetime import datetime
-
 # Ajouter le répertoire src au PYTHONPATH
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
